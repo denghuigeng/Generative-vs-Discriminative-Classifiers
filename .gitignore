@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environments
+.venv/
+venv/
+env/
+.env
+
+# Training outputs and checkpoints
+outputs/
+models/
+models-trained/
+logs/
+runs/
+checkpoints/
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+experiment_log.txt
+results.csv
+predictions_format.csv
+
+# Hugging Face / datasets cache
+.cache/
+hf_cache/
+datasets/
+
+# Notebook / editor / OS
+.ipynb_checkpoints/
+.DS_Store
+.idea/
+.vscode/
+
+# Generated local server variants
+environment.server.yml
