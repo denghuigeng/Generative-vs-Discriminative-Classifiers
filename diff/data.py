@@ -124,7 +124,7 @@ def get_lambada_test_dataset():
     return dataset
 
 
-def get_dataset(name, mode, cache_dir=None, block_size=1024, num_proc=8, train_size = None, logger = None):
+def get_dataset(name, mode, cache_dir=None, block_size=1024, num_proc=8, train_size = None, logger = None, seed=42):
     dataset_config = load_dataset_config(name)
     if name == "wikitext103":
         dataset = load_dataset("wikitext", name="wikitext-103-raw-v1", cache_dir=cache_dir)
@@ -163,11 +163,46 @@ def get_dataset(name, mode, cache_dir=None, block_size=1024, num_proc=8, train_s
     original_size = len(dataset[mode])
 
     if mode == "train" and train_size is not None:
-        # Select subset of training data
         train_size = int(train_size) if isinstance(train_size, str) else train_size
-        data = dataset[mode].shuffle().select(range(min(train_size, len(dataset[mode]))))
+        labels = np.asarray(dataset[mode]["label"], dtype=int)
+        classes, counts = np.unique(labels, return_counts=True)
+        target_size = min(train_size, len(dataset[mode]))
+        raw_counts = counts / counts.sum() * target_size
+        selected_counts = np.floor(raw_counts).astype(int)
+        if target_size >= len(classes):
+            selected_counts = np.maximum(selected_counts, 1)
+        selected_counts = np.minimum(selected_counts, counts)
+
+        while selected_counts.sum() > target_size:
+            candidates = np.where(selected_counts > 1)[0]
+            if len(candidates) == 0:
+                candidates = np.where(selected_counts > 0)[0]
+            index = candidates[
+                np.argmax(selected_counts[candidates] - raw_counts[candidates])
+            ]
+            selected_counts[index] -= 1
+
+        while selected_counts.sum() < target_size:
+            capacity = counts - selected_counts
+            candidates = np.where(capacity > 0)[0]
+            index = candidates[
+                np.argmax(raw_counts[candidates] - selected_counts[candidates])
+            ]
+            selected_counts[index] += 1
+
+        rng = np.random.default_rng(int(seed))
+        selected_indices = []
+        for label, count in zip(classes, selected_counts):
+            label_indices = np.where(labels == label)[0]
+            rng.shuffle(label_indices)
+            selected_indices.extend(label_indices[:count].tolist())
+        rng.shuffle(selected_indices)
+        data = dataset[mode].select(selected_indices)
         if logger:
-            logger.info(f"Dataset '{name}' reduced from {original_size} to {len(data)} examples as requested for mode {mode}")
+            logger.info(
+                f"Dataset '{name}' stratified from {original_size} to "
+                f"{len(data)} examples for mode {mode} with seed {seed}"
+            )
     else:
         data = dataset[mode]
         if logger:
@@ -376,7 +411,8 @@ def get_dataloaders(config, distributed=True, logger = None):
         cache_dir=config.data.cache_dir, 
         block_size=config.model.length,
         train_size=train_size,
-        logger = logger
+        logger = logger,
+        seed=config.seed,
     )
     
     valid_set = get_dataset(dataset_config['valid'], dataset_config['valid_split'], cache_dir=config.data.cache_dir, block_size=config.model.length, logger = logger)

@@ -1,5 +1,21 @@
 # Generative vs Discriminative Text Classification: A Comprehensive Comparison
 
+## Course Reproduction Workflow
+
+For the server-ready reproduction matrix, GPU assignment, dataset/model
+downloads, Figure 2/8 plotting, calibration/ordinal metrics, robustness,
+pretrained experiments, and SLURM commands, see:
+
+```text
+REPRODUCE_FIGURE2_SERVER.md
+```
+
+The additional reproducibility utilities are under:
+
+```text
+repro_fig2/
+```
+
 [![arXiv](https://img.shields.io/badge/arXiv-2506.12181-b31b1b.svg)](https://arxiv.org/abs/2506.12181)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 
@@ -157,7 +173,7 @@ The repository supports various text classification datasets:
 
 ### 1. Autoregressive (AR) Models
 - GPT-2 based architecture
-- Generative approach: P(label|text) via likelihood estimation
+- Generative approach: compare label-conditional likelihoods `P(text|label)`
 - Configurable model sizes (small, medium, full)
 
 ### 2. Pseudo-Autoregressive Models

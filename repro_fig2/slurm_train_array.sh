@@ -25,9 +25,10 @@ mkdir -p "$ROOT/outputs/slurm"
 cd "$ROOT"
 
 line="$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" "$JOBS")"
-IFS=$'\t' read -r model dataset sample seed layers heads <<< "$line"
+IFS=$'\t' read -r model dataset sample seed layers heads initialization <<< "$line"
+initialization="${initialization:-scratch}"
 
-echo "model=$model dataset=$dataset sample=$sample seed=$seed layers=$layers heads=$heads"
+echo "model=$model dataset=$dataset sample=$sample seed=$seed layers=$layers heads=$heads initialization=$initialization"
 
 python repro_fig2/train_one.py \
   --model "$model" \
@@ -36,8 +37,11 @@ python repro_fig2/train_one.py \
   --seed "$seed" \
   --layers "$layers" \
   --heads "$heads" \
-  --epochs 50 \
-  --batch_size 16 \
-  --eval_batch_size 32 \
-  --max_len 256 \
+  --initialization "$initialization" \
+  --precision "${PRECISION:-bf16}" \
+  --eval_batch_size "${EVAL_BATCH_SIZE:-32}" \
+  --inference_batch_size "${INFERENCE_BATCH_SIZE:-16}" \
+  --max_len "${MAX_LEN:-512}" \
+  --val_size "${VAL_SIZE:-480}" \
+  --num_workers "${NUM_WORKERS:-4}" \
   --output_root "$OUT"

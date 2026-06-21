@@ -7,6 +7,7 @@ defaults:
 dataset_name: ${oc.env:DATASET_NAME,null} # can be overridden by environment variable
 train_size: ${oc.env:TRAIN_SIZE,null}  # Can be overridden by environment variable
 n_iters: ${oc.env:N_ITERS,null} # Can be overridden by environment variable
+seed: ${oc.env:SEED,42}
 work_dir: exp_local/${data.train}_6/${now:%Y.%m.%d}/${now:%H%M%S}_size${oc.select:train_size,full}
 
 ngpus: 8

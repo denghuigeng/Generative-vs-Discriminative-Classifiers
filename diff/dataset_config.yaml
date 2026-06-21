@@ -40,7 +40,7 @@ emotion:
 SetFit/sst2:
   train: SetFit/sst2 
   valid: SetFit/sst2
-  valid_split: test
+  valid_split: validation
   columns_to_remove: ['text', 'label', 'label_text']
   max_length: 128
   n_iters: 150000
@@ -50,7 +50,7 @@ SetFit/sst2:
 SetFit/sst5:
   train: SetFit/sst5 
   valid: SetFit/sst5
-  valid_split: test
+  valid_split: validation
   columns_to_remove: ['text', 'label', 'label_text']
   max_length: 128
   n_iters: 150000

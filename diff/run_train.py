@@ -47,6 +47,10 @@ def run_multiprocess(rank, world_size, cfg, port):
 
 
 def _run(rank, world_size, cfg):
+    seed = int(cfg.seed) + rank
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
     torch.cuda.set_device(rank)
     work_dir = cfg.work_dir
 

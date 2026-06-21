@@ -1,391 +1,317 @@
-import torch
-import torch.multiprocessing as mp
-import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel as DDP
-import os
-from load_model import load_model
-from transformers import GPT2TokenizerFast
-import sampling_inference
-from data import get_dataset
-import torch
+#!/usr/bin/env python
+"""Distributed classification inference for trained diffusion models."""
+
+from __future__ import annotations
+
 import argparse
-from load_model import load_model
-from transformers import GPT2TokenizerFast
-import sampling_inference
-import re
-from transformers import GPT2TokenizerFast
-from datasets import load_dataset
-from itertools import chain
-import numpy as np
-import torch
-import urllib.request
-import zipfile
-import requests
+import csv
 import json
-from datasets import Dataset
-from torch.utils.data import DataLoader, DistributedSampler
-from torch.utils.data._utils.collate import default_convert
+import os
+import re
+import socket
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+import torch
+import torch.distributed as dist
+import torch.multiprocessing as mp
+from datasets import load_dataset
 from sklearn.metrics import classification_report
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data import DataLoader, DistributedSampler
+from transformers import GPT2TokenizerFast
 
-def cycle_loader(dataloader, sampler=None):
-    while 1:
-        if sampler is not None:
-            sampler.set_epoch(np.random.randint(0, 100000))
-        for data in dataloader:
-            yield data
+import sampling_inference
+from load_model import load_model
 
-def wt_detokenizer(string):
-    string = string.replace("s '", "s'")
-    string = re.sub(r"/' [0-9]/", r"/'[0-9]/", string)
-    string = string.replace(" @-@ ", "-")
-    string = string.replace(" @,@ ", ",")
-    string = string.replace(" @.@ ", ".")
-    string = string.replace(" : ", ": ")
-    string = string.replace(" ; ", "; ")
-    string = string.replace(" . ", ". ")
-    string = string.replace(" ! ", "! ")
-    string = string.replace(" ? ", "? ")
-    string = string.replace(" , ", ", ")
-    string = re.sub(r"\(\s*([^\)]*?)\s*\)", r"(\1)", string)
-    string = re.sub(r"\[\s*([^\]]*?)\s*\]", r"[\1]", string)
-    string = re.sub(r"{\s*([^}]*?)\s*}", r"{\1}", string)
-    string = re.sub(r"\"\s*([^\"]*?)\s*\"", r'"\1"', string)
-    string = re.sub(r"'\s*([^']*?)\s*'", r"'\1'", string)
-    string = string.replace("= = = =", "====")
-    string = string.replace("= = =", "===")
-    string = string.replace("= =", "==")
-    string = string.replace(" " + chr(176) + " ", chr(176))
-    string = string.replace(" \n", "\n")
-    string = string.replace("\n ", "\n")
-    string = string.replace(" N ", " 1 ")
-    string = string.replace(" 's", "'s")
-    return string
 
-def ptb_detokenizer(x):
-    x = x.replace(" 's", "'s")
-    x = x.replace("s ' ", "s' ")
-    x = x.replace(" n't", "n't")
-    x = x.replace(" \n ", "\n")
-    x = x.replace("\\/", "/")
-    for _ in range(10):
-        x = x.replace(" N ", " 1 ")
-    x = x.replace("$ 1", "$1")
-    x = x.replace("# 1", "#1")
-    x = x.replace("<unk>", "?")
-    return x
+PAPER_TEST_SPLITS = {
+    "imdb": "test",
+    "ag_news": "test",
+    "emotion": "test",
+    "SetFit/hate_speech_offensive": "test",
+    "Sp1786/multiclass-sentiment-analysis-dataset": "test",
+    "cornell-movie-review-data/rotten_tomatoes": "test",
+    "SetFit/sst2": "validation",
+    "SetFit/sst5": "validation",
+    "zeroshot/twitter-financial-news-sentiment": "validation",
+}
 
-def lm1b_detokenizer(x):
-    x = x.replace('http : / / ', 'http://')
-    x = x.replace('https : / / ', 'https://')
-    x = re.sub(r' \'(\w+)', r"'\1", x)
-    x = re.sub(r' (\w+) \. ', r' \1. ', x)
-    x = re.sub(r' (\w+) \.$', r' \1.', x)
-    x = x.replace(' ? ', '? ')
-    x = re.sub(r' \?$', '?', x)
-    x = x.replace(' ! ', '! ')
-    x = re.sub(r' \!$', '!', x)
-    x = x.replace(' , ', ', ')
-    x = x.replace(' : ', ': ')
-    x = x.replace(' ; ', '; ')
-    x = x.replace(' / ', '/')
-    x = re.sub(r'\" ([^\"]+) \"', r'"\1"', x)
-    x = re.sub(r'\' ([^\']+) \'', r"'\1'", x)
-    x = re.sub(r'\( ([^\(\)]+) \)', r"(\1)", x)
-    x = re.sub(r'\[ ([^\[\]]+) \]', r"[\1]", x)
-    x = x.replace('$ ', '$')
-    x = x.replace('£ ', '£')
-    return x
 
-def lambada_detokenizer(text):
-    text = text.replace(""", '"')
-    text = text.replace(""", '"')
-    return '\n'+text.strip()
+def find_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("", 0))
+        return int(sock.getsockname()[1])
 
-def get_lambada_test_dataset():
-    url = "https://openaipublic.blob.core.windows.net/gpt-2/data/lambada_test.jsonl"
-    def read_jsonl_to_list(url):
-        response = requests.get(url, stream=True)
-        data_list = []
-        for line in response.iter_lines(decode_unicode=True):
-            if line:
-                data = json.loads(line)
-                data_list.append(data)
-        return data_list
-    lambada_data = read_jsonl_to_list(url)
-    dataset = Dataset.from_list(lambada_data)
-    return dataset
 
-def get_dataset_agnews(name, mode, cache_dir=None, block_size=1024, num_proc=8):
-    if name == "wikitext103":
-        dataset = load_dataset("wikitext", name="wikitext-103-raw-v1", cache_dir=cache_dir)
-    elif name == "wikitext2":
-        dataset = load_dataset("wikitext", name="wikitext-2-raw-v1", cache_dir=cache_dir)
-    elif name == "ptb":
-        dataset = load_dataset("ptb_text_only", cache_dir=cache_dir)
-    elif name == "lambada":
-        dataset = get_lambada_test_dataset()
-    else:
-        dataset = load_dataset(name, cache_dir=cache_dir)
-
-    if name == "lambada":
-        data = dataset
-    else:
-        data = dataset[mode]
-
-    if name.startswith("wikitext"):
-        detokenizer = wt_detokenizer
-    elif name == "ptb":
-        detokenizer = ptb_detokenizer
-    elif name == "lm1b":
-        detokenizer = lm1b_detokenizer
-    elif name == "lambada":
-        detokenizer = lambada_detokenizer
-    else:
-        detokenizer = None
-
-    def _apply_detokenizer(detokenizer):
-        def detok(text):
-            for i, t in enumerate(text, 0):
-                text[i] = detokenizer(t)
-            return text
-        return detok
-
-    tokenizer = GPT2TokenizerFast.from_pretrained('gpt2',truncation_side='left')
-    EOS = tokenizer.encode(tokenizer.eos_token)[0]
-
-    def preprocess_and_tokenize(example):
-        if name == "ptb":
-            text = example['sentence']
-        elif name in ["ag_news", "snli", "sst5", "emotion", "imdb", "zeroshot/twitter-financial-news-sentiment"]:
-            text_label_pairs = zip(example['text'], example['label'])
-            text = [str(text)+'. Label:' for text, label in text_label_pairs]
-        else:
-            text = example["text"]
-        
-        if detokenizer is not None:
-            text = _apply_detokenizer(detokenizer)(text)
-        
-        tokenizer.pad_token = tokenizer.eos_token
-        tokenizer.padding_side = "right"
-        tokens = tokenizer(text, return_attention_mask=False,
-                           padding="max_length", 
-                            truncation=True, 
-                            max_length=128)
-        return tokens
-    
-    tokenized_dataset = data.map(preprocess_and_tokenize, batched=True, num_proc=num_proc, load_from_cache_file=True)
-    if name == "ptb":
-        tokenized_dataset = tokenized_dataset.remove_columns('sentence')
-    elif name in ["ag_news", "snli", "sst5", "emotion", "imdb", "zeroshot/twitter-financial-news-sentiment"]:
-        tokenized_dataset = tokenized_dataset.remove_columns(['text'])
-    else:
-        tokenized_dataset = tokenized_dataset.remove_columns('text')
-    
-    return tokenized_dataset
-
-def setup(rank, world_size):
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12355'
+def setup(rank: int, world_size: int, port: int) -> None:
+    os.environ["MASTER_ADDR"] = "127.0.0.1"
+    os.environ["MASTER_PORT"] = str(port)
     dist.init_process_group("nccl", rank=rank, world_size=world_size)
 
-def cleanup():
-    dist.destroy_process_group()
+
+def find_subsequence(sequence: torch.Tensor, pattern: torch.Tensor) -> Optional[int]:
+    if len(pattern) > len(sequence):
+        return None
+    for start in range(len(sequence) - len(pattern), -1, -1):
+        if torch.equal(sequence[start : start + len(pattern)], pattern):
+            return start
+    return None
 
 
+def load_eval_dataset(
+    dataset_name: str,
+    tokenizer: GPT2TokenizerFast,
+    max_length: int,
+):
+    raw = load_dataset(dataset_name, trust_remote_code=True)
+    split = PAPER_TEST_SPLITS.get(
+        dataset_name, "test" if "test" in raw else "validation"
+    )
+    if split not in raw:
+        raise KeyError(
+            f"{dataset_name} has no split '{split}'. Available: {list(raw.keys())}"
+        )
+    dataset = raw[split]
+    if "text" not in dataset.column_names or "label" not in dataset.column_names:
+        raise KeyError(
+            f"{dataset_name}/{split} must contain text and label columns; "
+            f"found {dataset.column_names}"
+        )
+    row_ids = list(range(len(dataset)))
+    dataset = dataset.add_column("_row_id", row_ids)
+    num_labels = max(int(label) for label in dataset["label"]) + 1
 
-def run_model(rank, world_size, args):
+    def tokenize(batch):
+        prompts = [f"{text}. Label:" for text in batch["text"]]
+        encoded = tokenizer(
+            prompts,
+            return_attention_mask=False,
+            padding="max_length",
+            truncation=True,
+            max_length=max_length,
+        )
+        encoded["ground_truth"] = [int(label) for label in batch["label"]]
+        encoded["row_id"] = [int(row_id) for row_id in batch["_row_id"]]
+        return encoded
+
+    tokenized = dataset.map(
+        tokenize,
+        batched=True,
+        remove_columns=dataset.column_names,
+        load_from_cache_file=True,
+    )
+    tokenized.set_format("torch")
+    return tokenized, split, num_labels
+
+
+def parse_generated_label(text: str, num_labels: int) -> Optional[int]:
+    label_part = text.rsplit("Label:", maxsplit=1)
+    if len(label_part) != 2:
+        return None
+    match = re.search(r"\d+", label_part[1])
+    if match is None:
+        return None
+    label = int(match.group(0))
+    return label if 0 <= label < num_labels else None
+
+
+def save_predictions(
+    output_file: Path,
+    records: List[Tuple[int, int, int]],
+    num_labels: int,
+    expected_rows: int,
+    dataset_name: str,
+    split: str,
+) -> None:
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    by_row: Dict[int, Tuple[int, int]] = {}
+    for row_id, true_label, predicted_label in records:
+        by_row.setdefault(row_id, (true_label, predicted_label))
+
+    missing_rows = sorted(set(range(expected_rows)) - set(by_row))
+    manifest = {
+        "dataset": dataset_name,
+        "split": split,
+        "expected_rows": expected_rows,
+        "completed_rows": len(by_row),
+        "missing_rows": len(missing_rows),
+        "probabilities_available": False,
+        "note": "Scores are one-hot placeholders; diffusion calibration is not reported.",
+    }
+    (output_file.parent / "inference_manifest.json").write_text(
+        json.dumps(manifest, indent=2)
+    )
+    if missing_rows:
+        raise RuntimeError(
+            f"Diffusion inference parsed {len(by_row)}/{expected_rows} examples. "
+            "No predictions.csv was written; inspect generated labels and rerun."
+        )
+
+    ordered = [(row_id, *by_row[row_id]) for row_id in range(expected_rows)]
+    with output_file.open("w", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["ground_truth", "predicted_label", "scores"])
+        for _, true_label, predicted_label in ordered:
+            one_hot = [0.0] * num_labels
+            one_hot[predicted_label] = 1.0
+            writer.writerow([true_label, predicted_label, str(one_hot)])
+
+    true_labels = [true_label for _, true_label, _ in ordered]
+    predictions = [predicted_label for _, _, predicted_label in ordered]
+    print(classification_report(true_labels, predictions, digits=4, zero_division=0))
+    print(f"Saved predictions to {output_file}")
+
+
+def run_model(
+    rank: int,
+    world_size: int,
+    port: int,
+    args: argparse.Namespace,
+) -> None:
+    initialized = False
     try:
-        print(f"Rank {rank}: Setting up distributed process")
-        setup(rank, world_size)
-        
-        print(f"Rank {rank}: Loading model")
-        device = torch.device(f'cuda:{rank}')
+        setup(rank, world_size, port)
+        initialized = True
+        torch.cuda.set_device(rank)
+        device = torch.device(f"cuda:{rank}")
+
         model, graph, noise = load_model(args.model_path, device)
         model = DDP(model, device_ids=[rank])
-        
-        print(f"Rank {rank}: Setting up tokenizer")
-        tokenizer = GPT2TokenizerFast.from_pretrained('gpt2')
-        EOS = tokenizer.encode(tokenizer.eos_token)[0]
-        label_tokens = tokenizer.encode(" Label:", add_special_tokens=False)
-        
-        print(f"Rank {rank}: Loading dataset")
-        print(args.dataset)
-        if(args.dataset == 'zeroshot/twitter-financial-news-sentiment'):
-            valid_set = get_dataset_agnews(args.dataset, "validation", block_size=1024)
-        else:
-            valid_set = get_dataset_agnews(args.dataset, "test", block_size=1024)
-        train_sampler = DistributedSampler(valid_set, num_replicas=world_size, rank=rank)
-        
-        valid_loader = DataLoader(
-            valid_set,
-            batch_size=args.batch_size // world_size,
-            shuffle=False,
-            num_workers=4,
-            pin_memory=True,
-            sampler=train_sampler,
-            collate_fn=default_convert
+        model.eval()
+
+        tokenizer = GPT2TokenizerFast.from_pretrained(
+            "gpt2", truncation_side="left"
+        )
+        tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.padding_side = "right"
+        eos_token_id = int(tokenizer.eos_token_id)
+        label_tokens = torch.tensor(
+            tokenizer.encode(" Label:", add_special_tokens=False),
+            dtype=torch.long,
+            device=device,
         )
 
-        all_predicted_labels = []
-        all_true_labels = []
+        eval_set, split, num_labels = load_eval_dataset(
+            args.dataset, tokenizer, args.max_length
+        )
+        sampler = DistributedSampler(
+            eval_set,
+            num_replicas=world_size,
+            rank=rank,
+            shuffle=False,
+            drop_last=False,
+        )
+        loader = DataLoader(
+            eval_set,
+            batch_size=max(1, args.batch_size // world_size),
+            sampler=sampler,
+            num_workers=args.num_workers,
+            pin_memory=True,
+        )
 
-        print(f"Rank {rank}: Starting processing")
-        for batch_idx, batch in enumerate(valid_loader):
-            print(f"Rank {rank}: Processing batch {batch_idx}")
-            
-            input_ids = torch.tensor([x['input_ids'] for x in batch], device=device)
-            batch_size = input_ids.size(0)
-            seq_len = input_ids.size(1)
-            
-            # Create attention mask (1 for real tokens, 0 for padding)
-            # attention_mask = (input_ids != tokenizer.pad_token_id).float().to(device)
-
-            print(f"Rank {rank}: Finding label positions")
+        local_records: List[Tuple[int, int, int]] = []
+        parse_failures = 0
+        for batch_index, batch in enumerate(loader):
+            input_ids = batch["input_ids"].to(device)
+            batch_size, sequence_length = input_ids.shape
             label_positions = []
-            for i in range(batch_size):
-                for j in range(seq_len):
-                    if torch.all(input_ids[i, j:j+len(label_tokens)] == torch.tensor(label_tokens, device=device)):
-                        label_positions.append(j + len(label_tokens) - 1)
-                        break
-                if len(label_positions) <= i:  # If no label position found for this sample
-                    label_positions.append(seq_len - 1)  # Use end of sequence
-            
-            def proj_fun(x):
-                attention_mask = torch.ones_like(x, dtype=torch.float32)
-                for i in range(batch_size):
-                    label_pos = label_positions[i]
-                    x[i, :label_pos + 1] = input_ids[i, :label_pos + 1]
-                    if label_pos + 2 < seq_len:
-                        x[i, label_pos + 2:] = EOS
-                        # Update attention mask - set to 0 for EOS tokens
-                        attention_mask[i, label_pos + 2:] = 0
-                        
-                # Create or update attention mask
-                # print(type(x), "type of x")
-                # attention_mask = (x != tokenizer.pad_token_id).float()
-                # print(type(attention_mask), "type of attention_mask")
-                return x,attention_mask
+            for row in input_ids:
+                start = find_subsequence(row, label_tokens)
+                if start is None:
+                    raise RuntimeError(
+                        "Could not find the ' Label:' prompt after tokenization."
+                    )
+                label_positions.append(start + len(label_tokens) - 1)
 
-            print(f"Rank {rank}: Running sampling")
-            try:
-                sampling_fn = sampling_inference.get_pc_sampler(
-                    graph, 
-                    noise, 
-                    (batch_size, seq_len), 
-                    'analytic', 
-                    args.steps, 
-                    device=device, 
-                    proj_fun=proj_fun
+            def projection(sample):
+                attention_mask = torch.ones_like(sample, dtype=torch.float32)
+                for row_index, label_position in enumerate(label_positions):
+                    sample[row_index, : label_position + 1] = input_ids[
+                        row_index, : label_position + 1
+                    ]
+                    if label_position + 2 < sequence_length:
+                        sample[row_index, label_position + 2 :] = eos_token_id
+                        attention_mask[row_index, label_position + 2 :] = 0
+                return sample, attention_mask
+
+            sampler_fn = sampling_inference.get_pc_sampler(
+                graph,
+                noise,
+                (batch_size, sequence_length),
+                "analytic",
+                args.steps,
+                device=device,
+                proj_fun=projection,
+            )
+            generated = sampler_fn(model)
+            decoded = tokenizer.batch_decode(generated)
+
+            for row_id, true_label, text in zip(
+                batch["row_id"].tolist(),
+                batch["ground_truth"].tolist(),
+                decoded,
+            ):
+                prediction = parse_generated_label(text, num_labels)
+                if prediction is None:
+                    parse_failures += 1
+                    continue
+                local_records.append(
+                    (int(row_id), int(true_label), int(prediction))
                 )
 
-                samples = sampling_fn(model)
-                text_samples = tokenizer.batch_decode(samples)
-            except Exception as e:
-                print(f"Rank {rank}: Error in sampling: {e}")
-                continue
+            if rank == 0:
+                print(
+                    f"batch={batch_index + 1}/{len(loader)} "
+                    f"parsed={len(local_records)} failures={parse_failures}"
+                )
 
-            print(f"Rank {rank}: Processing results")
-            for i, text_sample in enumerate(text_samples):
-                try:
-                    # More robust label extraction
-                    parts = text_sample.split("Label:")
-                    if len(parts) > 1:
-                        label_part = parts[-1].strip()
-                        if label_part:
-                            # Look for the first digit in the label part
-                            for char in label_part:
-                                if char.isdigit():
-                                    predicted_label = int(char)
-                                    all_predicted_labels.append(predicted_label)
-                                    all_true_labels.append(batch[i]['label'])
-                                    print(f"Rank {rank}: Successfully processed sample {i} with label {predicted_label}")
-                                    break
-                            else:
-                                print(f"Rank {rank}: No digit found in label part: '{label_part}'")
-                        else:
-                            print(f"Rank {rank}: Empty label part for sample {i}")
-                    else:
-                        print(f"Rank {rank}: No 'Label:' found in text: '{text_sample}'")
-                except Exception as e:
-                    print(f"Rank {rank}: Error processing sample {i}: {e}")
-                    print(f"Rank {rank}: Problem text sample: '{text_sample}'")
+        gathered_records = [None for _ in range(world_size)] if rank == 0 else None
+        dist.gather_object(local_records, gathered_records, dst=0)
+        if rank == 0:
+            combined: List[Tuple[int, int, int]] = []
+            for rank_records in gathered_records:
+                combined.extend(rank_records)
+            output_file = Path(
+                args.output_file
+                or os.path.join(args.model_path, "predictions.csv")
+            )
+            save_predictions(
+                output_file,
+                combined,
+                num_labels,
+                len(eval_set),
+                args.dataset,
+                split,
+            )
+    finally:
+        if initialized:
+            dist.destroy_process_group()
 
-            # Synchronize GPUs after each batch
-            torch.cuda.synchronize()
-            dist.barrier()
 
-            if len(all_predicted_labels) > 0:
-                try:
-                    print(f"Rank {rank}: Gathering results")
-                    pred_tensor = torch.tensor(all_predicted_labels, dtype=torch.long, device=device)
-                    label_tensor = torch.tensor(all_true_labels, dtype=torch.long, device=device)
-
-                    # Make sure all tensors are the same size
-                    max_size = torch.tensor([pred_tensor.size(0)], device=device)
-                    dist.all_reduce(max_size, op=dist.ReduceOp.MAX)
-                    
-                    if pred_tensor.size(0) < max_size.item():
-                        # Pad with -1 if needed
-                        pad_size = max_size.item() - pred_tensor.size(0)
-                        pred_tensor = torch.cat([pred_tensor, torch.full((pad_size,), -1, device=device)])
-                        label_tensor = torch.cat([label_tensor, torch.full((pad_size,), -1, device=device)])
-
-                    gathered_preds = [torch.zeros_like(pred_tensor, device=device) for _ in range(world_size)]
-                    gathered_labels = [torch.zeros_like(label_tensor, device=device) for _ in range(world_size)]
-                    
-                    dist.all_gather(gathered_preds, pred_tensor)
-                    dist.all_gather(gathered_labels, label_tensor)
-                    
-                    if rank == 0:
-                        # Filter out padding (-1)
-                        all_preds = torch.cat(gathered_preds).cpu().numpy()
-                        all_labels = torch.cat(gathered_labels).cpu().numpy()
-                        mask = all_preds != -1
-                        all_preds = all_preds[mask]
-                        all_labels = all_labels[mask]
-                        report = classification_report(all_labels, all_preds, digits = 4)
-                        print("\nIntermediate Results:")
-                        print(report)
-                except Exception as e:
-                    print(f"Rank {rank}: Error gathering results: {e}")
-
-            print(f"Rank {rank}: Completed batch {batch_idx}")
-
-        print(f"Rank {rank}: Cleaning up")
-        cleanup()
-        
-    except Exception as e:
-        print(f"Rank {rank}: Critical error: {e}")
-        import traceback
-        traceback.print_exc()
-        cleanup()
-
-def main():
-    parser = argparse.ArgumentParser(description="Generate some samples")
-    
-    parser.add_argument("--model_path", default="give_path_to_checkpoint", type=str)
-    parser.add_argument("--dataset", default="imdb", type=str)
-    parser.add_argument("--batch_size", type=int, default=256)
-    parser.add_argument("--steps", type=int, default=16) #original: 1024; 16 is the best.
-    parser.add_argument("--prefix", type=str, default="")
-    parser.add_argument("--suffix", type=str, default="")
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model_path", required=True)
+    parser.add_argument("--dataset", required=True)
+    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--steps", type=int, default=128)
+    parser.add_argument("--max_length", type=int, default=128)
+    parser.add_argument("--num_workers", type=int, default=4)
+    parser.add_argument("--output_file", type=str, default=None)
     args = parser.parse_args()
-    
+
     world_size = torch.cuda.device_count()
-    print(f"Starting distributed training with {world_size} GPUs")
-    
-    try:
-        mp.spawn(
-            run_model,
-            args=(world_size, args),
-            nprocs=world_size,
-            join=True
-        )
-    except Exception as e:
-        print(f"Error in main: {e}")
-        import traceback
-        traceback.print_exc()
+    if world_size < 1:
+        raise RuntimeError("Diffusion inference requires at least one visible CUDA GPU.")
+    port = find_free_port()
+    print(f"Starting diffusion inference with {world_size} GPU(s)")
+    mp.spawn(
+        run_model,
+        args=(world_size, port, args),
+        nprocs=world_size,
+        join=True,
+    )
+
 
 if __name__ == "__main__":
     main()
-
