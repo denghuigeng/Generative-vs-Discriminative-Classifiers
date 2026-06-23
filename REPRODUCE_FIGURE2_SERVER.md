@@ -313,6 +313,44 @@ sbatch \
 python repro_fig2/train_one.py --help
 ```
 
+`repro_fig2/train_one.py` 是实际实现论文式训练流程的唯一入口。为了兼容原仓库命令，
+`ar/train_gpt.py` 现在是一个轻量转发器，会把原来的参数翻译后交给统一入口：
+
+```text
+ar/train_gpt.py
+  -> repro_fig2/train_one.py --model ar
+```
+
+原始 Lightning 实现保留在 `ar/train_gpt_legacy.py`，仅用于读取旧 checkpoint；
+新实验不要直接运行 legacy 文件。可以先检查参数翻译而不启动训练：
+
+```bash
+python ar/train_gpt.py \
+  --data_key SetFit/sst2 \
+  --ckpt_dir "$ROOT/outputs/paper_repro" \
+  --model_size small \
+  --seed 42 \
+  --n_tr_sub 128 \
+  --max_epochs 100 \
+  --bsz 8 \
+  --n_devices 1 \
+  --max_len 512 \
+  --dry_run
+```
+
+新的 AR 训练顺序是：
+
+```text
+按类别比例分层采样
+-> 选择不与最终测试集重合的验证集
+-> 随机初始化 GPT-2 架构
+-> 训练语言模型目标
+-> 每轮按 P(text|label) 计算 validation weighted-F1
+-> 连续 10 轮无提升则早停
+-> 恢复最佳 checkpoint
+-> 在完整最终测试集输出 predictions.csv 和 metrics.json
+```
+
 ### 6.1 自动使用的论文式默认值
 
 | 模型 | 最大 epoch | 有效 batch size | 默认学习率 | checkpoint |

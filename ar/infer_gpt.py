@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from transformers import GPT2Tokenizer
 from sklearn.metrics import classification_report, f1_score, accuracy_score
 import numpy as np
-from train_gpt import GPT2Classifier, ClassificationDataset, get_dataset
+from train_gpt_legacy import GPT2Classifier, ClassificationDataset, get_dataset
 from torch.nn.parallel import DataParallel
 from tqdm import tqdm
 import ipdb

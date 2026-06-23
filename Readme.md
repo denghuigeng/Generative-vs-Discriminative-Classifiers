@@ -34,7 +34,8 @@ The comparison between discriminative and generative classifiers has intrigued r
 ├── README.md                    # This file
 ├── environment.yml             # Shared conda environment for AR, AR-Pseudo, and Encoder/MLM
 ├── ar/                         # Autoregressive classifier models
-│   ├── train_gpt.py           # Training script for GPT-based classifiers
+│   ├── train_gpt.py           # Compatibility launcher for the canonical pipeline
+│   ├── train_gpt_legacy.py    # Original Lightning code for old checkpoints
 │   └── infer_gpt.py           # Inference script for GPT-based classifiers
 ├── ar_pseudo/                  # Pseudo-autoregressive variant classifiers
 │   ├── train_gpt.py           # Training script for pseudo-AR classifiers

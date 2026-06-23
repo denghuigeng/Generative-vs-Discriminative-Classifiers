@@ -252,7 +252,7 @@ def training_arguments(
         num_train_epochs=args.epochs,
         learning_rate=args.lr,
         weight_decay=0.01,
-        evaluation_strategy="epoch",
+        eval_strategy="epoch",
         save_strategy="epoch",
         load_best_model_at_end=True,
         metric_for_best_model=metric_for_best_model,
@@ -569,13 +569,30 @@ class GenerativeClassificationTrainer(Trainer):
         super().__init__(*args, **kwargs)
         self.classification_eval = classification_eval
 
-    def evaluate(self, *args, **kwargs):
-        metrics = super().evaluate(*args, **kwargs)
+    def evaluation_loop(
+        self,
+        dataloader,
+        description,
+        prediction_loss_only=None,
+        ignore_keys=None,
+        metric_key_prefix="eval",
+    ):
+        output = super().evaluation_loop(
+            dataloader,
+            description,
+            prediction_loss_only=prediction_loss_only,
+            ignore_keys=ignore_keys,
+            metric_key_prefix=metric_key_prefix,
+        )
         probs, labels = self.classification_eval(self.model)
         cls_metrics = compute_basic_metrics(labels, probs)
-        metrics.update({f"eval_{key}": value for key, value in cls_metrics.items()})
-        self.log(metrics)
-        return metrics
+        output.metrics.update(
+            {
+                f"{metric_key_prefix}_{key}": value
+                for key, value in cls_metrics.items()
+            }
+        )
+        return output
 
 
 def train_generative(
