@@ -169,7 +169,15 @@ DIFF 依赖更敏感。如果环境文件安装失败，应优先按照 `diff/RE
 
 ## 4. Hugging Face 缓存与模型下载
 
-建议把缓存放在 `/data/gdh`：
+项目中的主要训练、推理和下载入口已经固定使用：
+
+```text
+https://hf-mirror.com
+```
+
+代码会在导入 Hugging Face 相关库之前设置
+`HF_ENDPOINT=https://hf-mirror.com`，服务器运行时不需要再手动配置 endpoint。
+缓存目录仍建议统一放在 `/data/gdh`：
 
 ```bash
 export HF_HOME=/data/gdh/hf_cache

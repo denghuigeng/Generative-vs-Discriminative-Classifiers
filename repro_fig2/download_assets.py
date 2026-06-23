@@ -6,6 +6,9 @@ initialized from scratch, but we still use Hugging Face configs/tokenizers.
 """
 
 import argparse
+import os
+
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 from datasets import load_dataset
 from transformers import (
@@ -45,6 +48,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    print(f"Hugging Face endpoint: {os.environ['HF_ENDPOINT']}")
     print("Caching Hugging Face datasets")
     for name, path in DATASETS.items():
         ds = load_dataset(path)

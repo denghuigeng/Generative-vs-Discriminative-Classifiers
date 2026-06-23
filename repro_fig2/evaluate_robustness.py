@@ -5,8 +5,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Dict, List, Sequence
+
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 import numpy as np
 import pandas as pd

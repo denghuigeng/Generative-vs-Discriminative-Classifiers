@@ -19,6 +19,8 @@ import os
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Sequence, Tuple
 
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -721,6 +723,7 @@ def main() -> None:
     validate_args(args)
 
     set_seed(args.seed)
+    print(f"Hugging Face endpoint: {os.environ['HF_ENDPOINT']}")
     torch.set_float32_matmul_precision("medium")
     print(f"CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES', '<not set>')}")
     print(f"CUDA available={torch.cuda.is_available()}, count={torch.cuda.device_count()}")

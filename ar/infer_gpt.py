@@ -2,6 +2,9 @@ import warnings
 
 warnings.filterwarnings("ignore")
 import os
+
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+
 import glob
 import argparse
 import torch

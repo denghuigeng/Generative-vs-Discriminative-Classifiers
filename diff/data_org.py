@@ -1,4 +1,8 @@
+import os
 import re
+
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+
 from transformers import GPT2TokenizerFast
 from datasets import load_dataset
 from itertools import chain

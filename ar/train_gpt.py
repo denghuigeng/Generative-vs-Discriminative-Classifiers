@@ -1,4 +1,7 @@
+import os
 import warnings
+
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 warnings.filterwarnings("ignore")
 
@@ -14,7 +17,6 @@ from transformers import GPT2Config, GPT2LMHeadModel, GPT2Tokenizer
 from sklearn.metrics import classification_report, f1_score, accuracy_score
 import numpy as np
 from datasets import load_dataset
-import os
 from pytorch_lightning import seed_everything
 import sys
 import ipdb
@@ -320,6 +322,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_epochs", type=int, default=500, help="Maximum number of training epochs")
 
     args = parser.parse_args()
+    print(f"Hugging Face endpoint: {os.environ['HF_ENDPOINT']}")
     seed_everything(args.seed)
     torch.set_float32_matmul_precision('medium')
 

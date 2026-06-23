@@ -4,6 +4,8 @@ import os.path
 import gc
 from itertools import chain
 
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+
 import numpy as np
 import torch
 import torch.distributed as dist

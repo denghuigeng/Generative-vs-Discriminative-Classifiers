@@ -1,3 +1,7 @@
+import os
+
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+
 import torch
 import torch.nn.functional as F
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoModelForMaskedLM

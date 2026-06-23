@@ -1,7 +1,10 @@
 import argparse
 import logging
+import os
 import time
 from pathlib import Path
+
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 import datasets
 from datasets import load_dataset

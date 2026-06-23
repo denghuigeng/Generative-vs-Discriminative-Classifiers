@@ -12,6 +12,8 @@ import socket
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -300,6 +302,7 @@ def main() -> None:
     parser.add_argument("--output_file", type=str, default=None)
     args = parser.parse_args()
 
+    print(f"Hugging Face endpoint: {os.environ['HF_ENDPOINT']}")
     world_size = torch.cuda.device_count()
     if world_size < 1:
         raise RuntimeError("Diffusion inference requires at least one visible CUDA GPU.")
