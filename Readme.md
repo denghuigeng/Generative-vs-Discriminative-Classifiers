@@ -10,6 +10,12 @@ pretrained experiments, and SLURM commands, see:
 REPRODUCE_FIGURE2_SERVER.md
 ```
 
+For the shortest executable checklist from setup to figures and analysis, see:
+
+```text
+RUN_STEP_BY_STEP.md
+```
+
 The additional reproducibility utilities are under:
 
 ```text
