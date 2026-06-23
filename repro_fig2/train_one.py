@@ -730,7 +730,7 @@ def main() -> None:
     parser.add_argument(
         "--output_root",
         type=str,
-        default="/data/gdh/Generative-vs-Discriminative-Classifiers/outputs/paper_repro",
+        default="./outputs/paper_repro",
     )
     args = parser.parse_args()
 

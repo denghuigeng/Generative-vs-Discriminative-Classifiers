@@ -4,10 +4,10 @@
 
 > **Generative or Discriminative? Revisiting Text Classification in the Era of Transformers**
 
-服务器项目目录统一设为：
+所有命令默认在仓库根目录执行，路径统一使用当前目录 `.`：
 
 ```bash
-export ROOT=/data/gdh/Generative-vs-Discriminative-Classifiers
+cd .
 ```
 
 目标不是要求一次性跑完所有实验，而是把论文中能够复现的实验矩阵、运行命令、GPU 分配和扩展分析全部准备好，之后根据服务器资源决定最终运行范围。
@@ -95,15 +95,14 @@ seeds        = 79140, 24561, 54641
 首次下载：
 
 ```bash
-cd /data/gdh
 git clone https://github.com/denghuigeng/Generative-vs-Discriminative-Classifiers.git
-cd /data/gdh/Generative-vs-Discriminative-Classifiers
+cd Generative-vs-Discriminative-Classifiers
 ```
 
 以后更新：
 
 ```bash
-cd /data/gdh/Generative-vs-Discriminative-Classifiers
+cd .
 git pull origin main
 ```
 
@@ -133,7 +132,7 @@ conda activate gendisc-transformers
 pip install torch torchvision torchaudio \
   --index-url https://download.pytorch.org/whl/cu121
 
-pip install -r /data/gdh/Generative-vs-Discriminative-Classifiers/requirements-server.txt
+pip install -r ./requirements-server.txt
 ```
 
 检查：
@@ -157,7 +156,7 @@ PY
 ### 3.2 DIFF 独立环境
 
 ```bash
-cd /data/gdh/Generative-vs-Discriminative-Classifiers/diff
+cd ./diff
 grep -v "^prefix:" environment.yml > environment.server.yml
 conda env create -n sedd -f environment.server.yml
 conda activate sedd
@@ -177,10 +176,10 @@ https://hf-mirror.com
 
 代码会在导入 Hugging Face 相关库之前设置
 `HF_ENDPOINT=https://hf-mirror.com`，服务器运行时不需要再手动配置 endpoint。
-缓存目录仍建议统一放在 `/data/gdh`：
+缓存目录建议放在当前仓库下：
 
 ```bash
-export HF_HOME=/data/gdh/hf_cache
+export HF_HOME=./hf_cache
 export HF_DATASETS_CACHE=$HF_HOME/datasets
 export TOKENIZERS_PARALLELISM=false
 mkdir -p "$HF_HOME"
@@ -189,7 +188,7 @@ mkdir -p "$HF_HOME"
 可以加入 `~/.bashrc`：
 
 ```bash
-echo 'export HF_HOME=/data/gdh/hf_cache' >> ~/.bashrc
+echo 'export HF_HOME=./hf_cache' >> ~/.bashrc
 echo 'export HF_DATASETS_CACHE=$HF_HOME/datasets' >> ~/.bashrc
 echo 'export TOKENIZERS_PARALLELISM=false' >> ~/.bashrc
 ```
@@ -197,7 +196,7 @@ echo 'export TOKENIZERS_PARALLELISM=false' >> ~/.bashrc
 ### 4.1 下载全部九个数据集、Tokenizer 和 Config
 
 ```bash
-cd "$ROOT"
+cd .
 conda activate gendisc-transformers
 python repro_fig2/download_assets.py
 ```
@@ -261,7 +260,7 @@ watch -n 2 nvidia-smi
 ```bash
 bash repro_fig2/run_job_file_local.sh \
   repro_fig2/jobs_paper.tsv \
-  /data/gdh/Generative-vs-Discriminative-Classifiers/outputs/paper_repro \
+  ./outputs/paper_repro \
   0,1,2,3
 ```
 
@@ -327,7 +326,7 @@ ar/train_gpt.py
 ```bash
 python ar/train_gpt.py \
   --data_key SetFit/sst2 \
-  --ckpt_dir "$ROOT/outputs/paper_repro" \
+  --ckpt_dir "./outputs/paper_repro" \
   --model_size small \
   --seed 42 \
   --n_tr_sub 128 \
@@ -430,7 +429,7 @@ V100、RTX 3090/4090 等可尝试：
 ### ENC
 
 ```bash
-cd "$ROOT"
+cd .
 conda activate gendisc-transformers
 
 CUDA_VISIBLE_DEVICES=0 python repro_fig2/train_one.py \
@@ -445,7 +444,7 @@ CUDA_VISIBLE_DEVICES=0 python repro_fig2/train_one.py \
   --gradient_accumulation_steps 1 \
   --max_len 128 \
   --precision fp32 \
-  --output_root "$ROOT/outputs/smoke"
+  --output_root "./outputs/smoke"
 ```
 
 把 `--model` 分别替换为：
@@ -459,7 +458,7 @@ mlm
 检查输出：
 
 ```bash
-find "$ROOT/outputs/smoke" -name metrics.json -o -name predictions.csv
+find "./outputs/smoke" -name metrics.json -o -name predictions.csv
 ```
 
 每次成功运行应生成：
@@ -487,7 +486,7 @@ CUDA_VISIBLE_DEVICES=0 python repro_fig2/train_one.py \
   --layers 12 \
   --heads 12 \
   --precision bf16 \
-  --output_root "$ROOT/outputs/paper_repro"
+  --output_root "./outputs/paper_repro"
 ```
 
 ### 8.2 AR：SST-5，12 层，样本量 128
@@ -502,7 +501,7 @@ CUDA_VISIBLE_DEVICES=1 python repro_fig2/train_one.py \
   --heads 12 \
   --precision bf16 \
   --inference_batch_size 16 \
-  --output_root "$ROOT/outputs/paper_repro"
+  --output_root "./outputs/paper_repro"
 ```
 
 ### 8.3 Full-data
@@ -518,7 +517,7 @@ CUDA_VISIBLE_DEVICES=2 python repro_fig2/train_one.py \
   --layers 6 \
   --heads 6 \
   --precision bf16 \
-  --output_root "$ROOT/outputs/paper_repro"
+  --output_root "./outputs/paper_repro"
 ```
 
 程序会自动跳过已经存在 `predictions.csv + metrics.json` 的完整任务。重新运行时使用：
@@ -545,7 +544,7 @@ python repro_fig2/make_jobs_paper.py --help
 python repro_fig2/make_jobs_paper.py \
   --preset figure2 \
   --one_seed \
-  --out "$ROOT/repro_fig2/jobs_figure2_1seed.tsv"
+  --out "./repro_fig2/jobs_figure2_1seed.tsv"
 ```
 
 单 seed 非 DIFF 部分：
@@ -559,7 +558,7 @@ python repro_fig2/make_jobs_paper.py \
 ```bash
 python repro_fig2/make_jobs_paper.py \
   --preset figure2 \
-  --out "$ROOT/repro_fig2/jobs_figure2_3seed.tsv"
+  --out "./repro_fig2/jobs_figure2_3seed.tsv"
 ```
 
 ### 9.2 Figure 8：全部九个数据集
@@ -568,7 +567,7 @@ python repro_fig2/make_jobs_paper.py \
 python repro_fig2/make_jobs_paper.py \
   --preset figure8 \
   --one_seed \
-  --out "$ROOT/repro_fig2/jobs_figure8_1seed.tsv"
+  --out "./repro_fig2/jobs_figure8_1seed.tsv"
 ```
 
 ### 9.3 Figure 3/9：AR vs ARpseudo
@@ -578,7 +577,7 @@ python repro_fig2/make_jobs_paper.py \
   --preset non_diff_full \
   --models ar,arpseudo \
   --one_seed \
-  --out "$ROOT/repro_fig2/jobs_arpseudo_1seed.tsv"
+  --out "./repro_fig2/jobs_arpseudo_1seed.tsv"
 ```
 
 ### 9.4 全部非扩散实验
@@ -588,7 +587,7 @@ python repro_fig2/make_jobs_paper.py \
 ```bash
 python repro_fig2/make_jobs_paper.py \
   --preset non_diff_full \
-  --out "$ROOT/repro_fig2/jobs_non_diff_full.tsv"
+  --out "./repro_fig2/jobs_non_diff_full.tsv"
 ```
 
 任务数：
@@ -605,8 +604,8 @@ python repro_fig2/make_jobs_paper.py \
 
 ```bash
 bash repro_fig2/run_job_file_local.sh \
-  "$ROOT/repro_fig2/jobs_figure2_1seed.tsv" \
-  "$ROOT/outputs/paper_repro" \
+  "./repro_fig2/jobs_figure2_1seed.tsv" \
+  "./outputs/paper_repro" \
   0,1,2,3
 ```
 
@@ -621,7 +620,7 @@ outputs/paper_repro/local_logs/
 先查看任务数：
 
 ```bash
-wc -l "$ROOT/repro_fig2/jobs_figure2_1seed.tsv"
+wc -l "./repro_fig2/jobs_figure2_1seed.tsv"
 ```
 
 假设为 315 行：
@@ -629,7 +628,7 @@ wc -l "$ROOT/repro_fig2/jobs_figure2_1seed.tsv"
 ```bash
 sbatch \
   --array=0-314%12 \
-  --export=ALL,JOBS="$ROOT/repro_fig2/jobs_figure2_1seed.tsv",OUT="$ROOT/outputs/paper_repro",PRECISION=bf16,MAX_LEN=512 \
+  --export=ALL,JOBS="./repro_fig2/jobs_figure2_1seed.tsv",OUT="./outputs/paper_repro",PRECISION=bf16,MAX_LEN=512 \
   repro_fig2/slurm_train_array.sh
 ```
 
@@ -637,7 +636,7 @@ sbatch \
 
 ```bash
 squeue -u "$USER"
-tail -f "$ROOT/outputs/slurm/gendisc_fig2_<JOBID>_<TASKID>.out"
+tail -f "./outputs/slurm/gendisc_fig2_<JOBID>_<TASKID>.out"
 ```
 
 失败任务可以直接重新提交。已经完成的任务会自动跳过。
@@ -665,7 +664,7 @@ paper hardware: 8 * NVIDIA A100
 conda activate sedd
 python repro_fig2/make_diff_jobs.py \
   --one_seed \
-  --out "$ROOT/repro_fig2/jobs_diff_1seed.tsv"
+  --out "./repro_fig2/jobs_diff_1seed.tsv"
 ```
 
 只生成 Figure 2 的代表性 DIFF 任务：
@@ -676,7 +675,7 @@ python repro_fig2/make_diff_jobs.py \
   --models small medium large \
   --samples 128 1024 4096 -1 \
   --one_seed \
-  --out "$ROOT/repro_fig2/jobs_diff_figure2_representative.tsv"
+  --out "./repro_fig2/jobs_diff_figure2_representative.tsv"
 ```
 
 这里 `small/medium/large` 分别对应 1/6/12 层。
@@ -684,26 +683,26 @@ python repro_fig2/make_diff_jobs.py \
 ### 11.3 单卡先跑
 
 ```bash
-JOBS="$ROOT/repro_fig2/jobs_diff_figure2_representative.tsv"
+JOBS="./repro_fig2/jobs_diff_figure2_representative.tsv"
 N=$(wc -l < "$JOBS")
 
 sbatch \
   --gres=gpu:1 \
   --array=0-$((N-1))%2 \
-  --export=ALL,JOBS="$JOBS",DIFF_OUT="$ROOT/outputs/diff_repro",NGPUS=1,N_ITERS=200000 \
+  --export=ALL,JOBS="$JOBS",DIFF_OUT="./outputs/diff_repro",NGPUS=1,N_ITERS=200000 \
   repro_fig2/slurm_diff_array.sh
 ```
 
 ### 11.4 八卡论文式运行
 
 ```bash
-JOBS="$ROOT/repro_fig2/jobs_diff_figure2_representative.tsv"
+JOBS="./repro_fig2/jobs_diff_figure2_representative.tsv"
 N=$(wc -l < "$JOBS")
 
 sbatch \
   --gres=gpu:a100:8 \
   --array=0-$((N-1))%1 \
-  --export=ALL,JOBS="$JOBS",DIFF_OUT="$ROOT/outputs/diff_repro",NGPUS=8,N_ITERS=200000 \
+  --export=ALL,JOBS="$JOBS",DIFF_OUT="./outputs/diff_repro",NGPUS=8,N_ITERS=200000 \
   repro_fig2/slurm_diff_array.sh
 ```
 
@@ -720,12 +719,12 @@ DIFF 单任务很重，不建议直接提交全部 567 个任务。先跑：
 训练完成后，用相同任务列表提交推理：
 
 ```bash
-JOBS="$ROOT/repro_fig2/jobs_diff_figure2_representative.tsv"
+JOBS="./repro_fig2/jobs_diff_figure2_representative.tsv"
 N=$(wc -l < "$JOBS")
 
 sbatch \
   --array=0-$((N-1))%4 \
-  --export=ALL,JOBS="$JOBS",DIFF_OUT="$ROOT/outputs/diff_repro",STEPS=128,BATCH_SIZE=64,MAX_LENGTH=128 \
+  --export=ALL,JOBS="$JOBS",DIFF_OUT="./outputs/diff_repro",STEPS=128,BATCH_SIZE=64,MAX_LENGTH=128 \
   repro_fig2/slurm_diff_infer_array.sh
 ```
 
@@ -749,7 +748,7 @@ DIFF 默认 absorbing diffusion 不提供自然的完整类别概率，因此只
 conda activate gendisc-transformers
 
 python repro_fig2/aggregate_and_plot.py \
-  --output_root "$ROOT/outputs/paper_repro" \
+  --output_root "./outputs/paper_repro" \
   --initialization scratch \
   --layers 1 6 12 \
   --datasets agnews emotion rottentomatoes sst5 twitter \
@@ -760,8 +759,8 @@ python repro_fig2/aggregate_and_plot.py \
 
 ```bash
 python repro_fig2/aggregate_and_plot.py \
-  --output_root "$ROOT/outputs/paper_repro" \
-  --additional_output_roots "$ROOT/outputs/diff_repro" \
+  --output_root "./outputs/paper_repro" \
+  --additional_output_roots "./outputs/diff_repro" \
   --initialization scratch \
   --layers 1 6 12 \
   --datasets agnews emotion rottentomatoes sst5 twitter \
@@ -797,8 +796,8 @@ outputs/paper_repro/
 
 ```bash
 python repro_fig2/aggregate_and_plot.py \
-  --output_root "$ROOT/outputs/paper_repro" \
-  --additional_output_roots "$ROOT/outputs/diff_repro" \
+  --output_root "./outputs/paper_repro" \
+  --additional_output_roots "./outputs/diff_repro" \
   --initialization scratch \
   --layers 1 6 12 \
   --datasets imdb agnews emotion hatespeech multiclasssentiment rottentomatoes sst2 sst5 twitter \
@@ -847,7 +846,7 @@ ECE/MCE 默认采用 15 个等宽 confidence bins。
 
 ```bash
 python repro_fig2/plot_reliability.py \
-  --output_root "$ROOT/outputs/paper_repro" \
+  --output_root "./outputs/paper_repro" \
   --dataset sst5 \
   --layers 12 \
   --sample_size 1024 \
@@ -874,19 +873,19 @@ full-data checkpoints
 
 ```bash
 python repro_fig2/make_robustness_jobs.py \
-  --output_root "$ROOT/outputs/paper_repro" \
+  --output_root "./outputs/paper_repro" \
   --layers 6 12 \
-  --out "$ROOT/repro_fig2/jobs_robustness.tsv"
+  --out "./repro_fig2/jobs_robustness.tsv"
 ```
 
 ### 14.2 运行
 
 ```bash
-N=$(wc -l < "$ROOT/repro_fig2/jobs_robustness.tsv")
+N=$(wc -l < "./repro_fig2/jobs_robustness.tsv")
 
 sbatch \
   --array=0-$((N-1))%8 \
-  --export=ALL,JOBS="$ROOT/repro_fig2/jobs_robustness.tsv" \
+  --export=ALL,JOBS="./repro_fig2/jobs_robustness.tsv" \
   repro_fig2/slurm_robustness_array.sh
 ```
 
@@ -911,7 +910,7 @@ robustness/substitute/drop_thresholds.json
 
 ```bash
 python repro_fig2/aggregate_robustness.py \
-  --output_root "$ROOT/outputs/paper_repro"
+  --output_root "./outputs/paper_repro"
 ```
 
 ---
@@ -935,15 +934,15 @@ python repro_fig2/make_jobs_paper.py \
   --models enc,ar \
   --initialization pretrained \
   --one_seed \
-  --out "$ROOT/repro_fig2/jobs_pretrained_1seed.tsv"
+  --out "./repro_fig2/jobs_pretrained_1seed.tsv"
 ```
 
 运行：
 
 ```bash
 bash repro_fig2/run_job_file_local.sh \
-  "$ROOT/repro_fig2/jobs_pretrained_1seed.tsv" \
-  "$ROOT/outputs/pretrained_repro" \
+  "./repro_fig2/jobs_pretrained_1seed.tsv" \
+  "./outputs/pretrained_repro" \
   0,1,2,3
 ```
 
@@ -951,7 +950,7 @@ bash repro_fig2/run_job_file_local.sh \
 
 ```bash
 python repro_fig2/aggregate_and_plot.py \
-  --output_root "$ROOT/outputs/pretrained_repro" \
+  --output_root "./outputs/pretrained_repro" \
   --initialization pretrained \
   --layers 12 \
   --datasets imdb agnews emotion hatespeech multiclasssentiment rottentomatoes sst2 sst5 twitter
@@ -1036,7 +1035,7 @@ sacct -j <JOBID> --format=JobID,State,Elapsed,MaxRSS,ExitCode
 
 ```bash
 tensorboard \
-  --logdir "$ROOT/outputs" \
+  --logdir "./outputs" \
   --host 0.0.0.0 \
   --port 6006
 ```
@@ -1101,8 +1100,8 @@ AR 对每个类别都要计算一次 `P(text | label)`：
 统计完成任务：
 
 ```bash
-find "$ROOT/outputs" -name metrics.json | wc -l
-find "$ROOT/outputs" -name predictions.csv | wc -l
+find "./outputs" -name metrics.json | wc -l
+find "./outputs" -name predictions.csv | wc -l
 ```
 
 查找有参数但没有预测结果的失败任务：
@@ -1110,7 +1109,7 @@ find "$ROOT/outputs" -name predictions.csv | wc -l
 ```bash
 python - <<'PY'
 from pathlib import Path
-root = Path("/data/gdh/Generative-vs-Discriminative-Classifiers/outputs")
+root = Path("./outputs")
 for args_file in root.rglob("args.json"):
     if not (args_file.parent / "predictions.csv").exists():
         print(args_file.parent)

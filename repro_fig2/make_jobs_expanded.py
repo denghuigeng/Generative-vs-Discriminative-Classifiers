@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-ROOT = Path("/data/gdh/Generative-vs-Discriminative-Classifiers")
+ROOT = Path(".")
 
 DATASETS = ["agnews", "emotion", "rottentomatoes", "sst5", "twitter"]
 MODELS = ["enc", "ar", "mlm"]

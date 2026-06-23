@@ -3,11 +3,10 @@
 本文档只写“怎么一步步跑出结果”。更完整的背景、实验矩阵和可选扩展见
 `REPRODUCE_FIGURE2_SERVER.md`。
 
-默认服务器路径：
+默认所有命令都在仓库根目录运行，路径统一使用当前目录 `.`：
 
 ```bash
-export ROOT=/data/gdh/Generative-vs-Discriminative-Classifiers
-cd "$ROOT"
+cd .
 ```
 
 最终目标：
@@ -25,7 +24,7 @@ cd "$ROOT"
 如果之前已经克隆过仓库：
 
 ```bash
-cd /data/gdh/Generative-vs-Discriminative-Classifiers
+cd .
 git pull origin main
 git log -1 --oneline
 ```
@@ -51,7 +50,7 @@ conda activate llm-26-gpu
 建议统一 Hugging Face 缓存目录：
 
 ```bash
-export HF_HOME=/data/gdh/hf_cache
+export HF_HOME=./hf_cache
 export HF_HUB_CACHE=$HF_HOME/hub
 export HF_DATASETS_CACHE=$HF_HOME/datasets
 export TOKENIZERS_PARALLELISM=false
@@ -122,7 +121,7 @@ PY
 ```bash
 CUDA_VISIBLE_DEVICES=0 python ar/train_gpt.py \
   --data_key SetFit/sst2 \
-  --ckpt_dir "$ROOT/outputs/paper_repro" \
+  --ckpt_dir "./outputs/paper_repro" \
   --model_size small \
   --seed 42 \
   --n_tr_sub 128 \
@@ -167,7 +166,7 @@ CUDA_VISIBLE_DEVICES=0 python repro_fig2/train_one.py \
   --inference_batch_size 4 \
   --max_len 128 \
   --precision fp32 \
-  --output_root "$ROOT/outputs/smoke" \
+  --output_root "./outputs/smoke" \
   --overwrite
 ```
 
@@ -187,14 +186,14 @@ CUDA_VISIBLE_DEVICES=0 python repro_fig2/train_one.py \
   --eval_batch_size 4 \
   --max_len 128 \
   --precision fp32 \
-  --output_root "$ROOT/outputs/smoke" \
+  --output_root "./outputs/smoke" \
   --overwrite
 ```
 
 检查输出：
 
 ```bash
-find "$ROOT/outputs/smoke" -name metrics.json -o -name predictions.csv
+find "./outputs/smoke" -name metrics.json -o -name predictions.csv
 ```
 
 如果两个任务都能生成 `metrics.json` 和 `predictions.csv`，说明环境、数据、模型和显卡都通了。
@@ -220,14 +219,14 @@ find "$ROOT/outputs/smoke" -name metrics.json -o -name predictions.csv
 python repro_fig2/make_jobs_paper.py \
   --preset figure2 \
   --one_seed \
-  --out "$ROOT/repro_fig2/jobs_figure2_1seed.tsv"
+  --out "./repro_fig2/jobs_figure2_1seed.tsv"
 ```
 
 确认任务数：
 
 ```bash
-wc -l "$ROOT/repro_fig2/jobs_figure2_1seed.tsv"
-head "$ROOT/repro_fig2/jobs_figure2_1seed.tsv"
+wc -l "./repro_fig2/jobs_figure2_1seed.tsv"
+head "./repro_fig2/jobs_figure2_1seed.tsv"
 ```
 
 应为：
@@ -246,8 +245,8 @@ head "$ROOT/repro_fig2/jobs_figure2_1seed.tsv"
 
 ```bash
 PRECISION=bf16 bash repro_fig2/run_job_file_local.sh \
-  "$ROOT/repro_fig2/jobs_figure2_1seed.tsv" \
-  "$ROOT/outputs/paper_repro" \
+  "./repro_fig2/jobs_figure2_1seed.tsv" \
+  "./outputs/paper_repro" \
   0,1,2,3
 ```
 
@@ -255,8 +254,8 @@ PRECISION=bf16 bash repro_fig2/run_job_file_local.sh \
 
 ```bash
 PRECISION=fp16 bash repro_fig2/run_job_file_local.sh \
-  "$ROOT/repro_fig2/jobs_figure2_1seed.tsv" \
-  "$ROOT/outputs/paper_repro" \
+  "./repro_fig2/jobs_figure2_1seed.tsv" \
+  "./outputs/paper_repro" \
   0,1,2,3
 ```
 
@@ -269,8 +268,8 @@ MLM_BATCH_SIZE=32 MLM_GRAD_ACCUM=1 \
 AR_BATCH_SIZE=16 AR_GRAD_ACCUM=2 \
 EVAL_BATCH_SIZE=64 INFERENCE_BATCH_SIZE=32 \
 PRECISION=fp16 bash repro_fig2/run_job_file_local.sh \
-  "$ROOT/repro_fig2/jobs_figure2_1seed.tsv" \
-  "$ROOT/outputs/paper_repro_fastbatch" \
+  "./repro_fig2/jobs_figure2_1seed.tsv" \
+  "./outputs/paper_repro_fastbatch" \
   0,1,2,3
 ```
 
@@ -289,7 +288,7 @@ AR:      batch_size=8,  grad_accum=4
 
 ```text
 Total jobs: 315
-Logs: /data/gdh/Generative-vs-Discriminative-Classifiers/outputs/paper_repro/local_logs
+Logs: ./outputs/paper_repro/local_logs
 ```
 
 每个任务结束后会打印类似：
@@ -306,23 +305,23 @@ Logs: /data/gdh/Generative-vs-Discriminative-Classifiers/outputs/paper_repro/loc
 
 ```bash
 nohup bash -c 'PRECISION=fp16 bash repro_fig2/run_job_file_local.sh \
-  "$ROOT/repro_fig2/jobs_figure2_1seed.tsv" \
-  "$ROOT/outputs/paper_repro" \
-  0,1,2,3' > "$ROOT/outputs/run_figure2_1seed.log" 2>&1 &
+  "./repro_fig2/jobs_figure2_1seed.tsv" \
+  "./outputs/paper_repro" \
+  0,1,2,3' > "./outputs/run_figure2_1seed.log" 2>&1 &
 ```
 
 监控：
 
 ```bash
 watch -n 2 nvidia-smi
-tail -f "$ROOT/outputs/run_figure2_1seed.log"
-find "$ROOT/outputs/paper_repro" -name metrics.json | wc -l
+tail -f "./outputs/run_figure2_1seed.log"
+find "./outputs/paper_repro" -name metrics.json | wc -l
 ```
 
 如果你已经用旧脚本启动了任务，旧日志不会显示 ETA。可以先用下面两个命令估计进度：
 
 ```bash
-find "$ROOT/outputs/paper_repro" -name metrics.json | wc -l
+find "./outputs/paper_repro" -name metrics.json | wc -l
 ps -eo pid,etime,cmd | grep train_one.py | grep -v grep
 ```
 
@@ -341,7 +340,7 @@ python repro_fig2/make_jobs_paper.py \
   --preset figure2 \
   --datasets agnews,sst5 \
   --models enc,ar,mlm \
-  --out "$ROOT/repro_fig2/jobs_agnews_sst5_3seed.tsv"
+  --out "./repro_fig2/jobs_agnews_sst5_3seed.tsv"
 ```
 
 任务数：
@@ -354,8 +353,8 @@ python repro_fig2/make_jobs_paper.py \
 
 ```bash
 PRECISION=fp16 bash repro_fig2/run_job_file_local.sh \
-  "$ROOT/repro_fig2/jobs_agnews_sst5_3seed.tsv" \
-  "$ROOT/outputs/paper_repro" \
+  "./repro_fig2/jobs_agnews_sst5_3seed.tsv" \
+  "./outputs/paper_repro" \
   0,1,2,3
 ```
 
@@ -369,7 +368,7 @@ PRECISION=fp16 bash repro_fig2/run_job_file_local.sh \
 
 ```bash
 python repro_fig2/aggregate_and_plot.py \
-  --output_root "$ROOT/outputs/paper_repro" \
+  --output_root "./outputs/paper_repro" \
   --initialization scratch \
   --layers 1 6 12 \
   --datasets agnews emotion rottentomatoes sst5 twitter \
@@ -435,7 +434,7 @@ PY
 
 ```bash
 python repro_fig2/plot_reliability.py \
-  --output_root "$ROOT/outputs/paper_repro" \
+  --output_root "./outputs/paper_repro" \
   --dataset sst5 \
   --layers 12 \
   --sample_size -1 \

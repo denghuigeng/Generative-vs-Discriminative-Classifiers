@@ -5,14 +5,14 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=48G
 #SBATCH --time=24:00:00
-#SBATCH --output=/data/gdh/Generative-vs-Discriminative-Classifiers/outputs/slurm/%x_%A_%a.out
-#SBATCH --error=/data/gdh/Generative-vs-Discriminative-Classifiers/outputs/slurm/%x_%A_%a.err
+#SBATCH --output=outputs/slurm/%x_%A_%a.out
+#SBATCH --error=outputs/slurm/%x_%A_%a.err
 
 set -euo pipefail
 
-ROOT="/data/gdh/Generative-vs-Discriminative-Classifiers"
-JOBS="${JOBS:-$ROOT/repro_fig2/jobs_diff.tsv}"
-DIFF_OUT="${DIFF_OUT:-$ROOT/outputs/diff_repro}"
+ROOT="."
+JOBS="${JOBS:-./repro_fig2/jobs_diff.tsv}"
+DIFF_OUT="${DIFF_OUT:-./outputs/diff_repro}"
 STEPS="${STEPS:-128}"
 BATCH_SIZE="${BATCH_SIZE:-64}"
 MAX_LENGTH="${MAX_LENGTH:-128}"
@@ -21,10 +21,10 @@ NUM_WORKERS="${NUM_WORKERS:-4}"
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate sedd
 
-export HF_HOME="/data/gdh/hf_cache"
+export HF_HOME="${HF_HOME:-./hf_cache}"
 export HF_DATASETS_CACHE="$HF_HOME/datasets"
 
-cd "$ROOT/diff"
+cd "./diff"
 line="$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" "$JOBS")"
 IFS=$'\t' read -r dataset_key dataset_path model_size sample seed <<< "$line"
 sample_tag="$sample"

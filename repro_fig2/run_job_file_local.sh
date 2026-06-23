@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-ROOT="${ROOT:-/data/gdh/Generative-vs-Discriminative-Classifiers}"
+ROOT="${ROOT:-.}"
 JOBS="${1:?job TSV is required}"
 OUT="${2:?output root is required}"
 GPU_CSV="${3:-0}"
@@ -161,7 +161,7 @@ worker() {
         "${batch_size:-paper-default}" \
         "${grad_accum:-paper-default}" \
         "$log"
-      if CUDA_VISIBLE_DEVICES="$gpu" python "$ROOT/repro_fig2/train_one.py" \
+      if CUDA_VISIBLE_DEVICES="$gpu" python "./repro_fig2/train_one.py" \
         --model "$model" \
         --dataset "$dataset" \
         --sample_size "$sample" \
@@ -200,7 +200,7 @@ worker() {
   done < "$JOBS"
 }
 
-cd "$ROOT"
+cd .
 for index in "${!GPUS[@]}"; do
   worker "$index" "${GPUS[$index]}" &
 done

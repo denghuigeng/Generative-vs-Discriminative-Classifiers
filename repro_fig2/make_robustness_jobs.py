@@ -19,7 +19,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--out",
-        default="/data/gdh/Generative-vs-Discriminative-Classifiers/repro_fig2/jobs_robustness.tsv",
+        default="./repro_fig2/jobs_robustness.tsv",
     )
     args = parser.parse_args()
 

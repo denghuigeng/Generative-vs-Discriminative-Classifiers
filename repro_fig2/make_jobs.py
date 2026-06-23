@@ -4,7 +4,7 @@
 import argparse
 from pathlib import Path
 
-ROOT = Path("/data/gdh/Generative-vs-Discriminative-Classifiers")
+ROOT = Path(".")
 OUT = ROOT / "repro_fig2" / "jobs_12layer.tsv"
 
 DATASETS = ["agnews", "sst5"]

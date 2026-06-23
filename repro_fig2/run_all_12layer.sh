@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="/data/gdh/Generative-vs-Discriminative-Classifiers"
-OUT="$ROOT/outputs/fig2_repro"
+ROOT="."
+OUT="./outputs/fig2_repro"
 GPU="${GPU:-0}"
 PRECISION="${PRECISION:-bf16}"
 
-cd "$ROOT"
+cd .
 
 DATASETS=("agnews" "sst5")
 MODELS=("enc" "ar")

@@ -262,7 +262,7 @@ def set_sample_ticks(ax, sample_sizes: Iterable[int]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output_root", type=str, default="/data/gdh/Generative-vs-Discriminative-Classifiers/outputs/fig2_repro")
+    parser.add_argument("--output_root", type=str, default="./outputs/fig2_repro")
     parser.add_argument(
         "--additional_output_roots",
         nargs="*",

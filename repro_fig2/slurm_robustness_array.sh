@@ -5,21 +5,21 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=48G
 #SBATCH --time=24:00:00
-#SBATCH --output=/data/gdh/Generative-vs-Discriminative-Classifiers/outputs/slurm/%x_%A_%a.out
-#SBATCH --error=/data/gdh/Generative-vs-Discriminative-Classifiers/outputs/slurm/%x_%A_%a.err
+#SBATCH --output=outputs/slurm/%x_%A_%a.out
+#SBATCH --error=outputs/slurm/%x_%A_%a.err
 
 set -euo pipefail
 
-ROOT="/data/gdh/Generative-vs-Discriminative-Classifiers"
-JOBS="${JOBS:-$ROOT/repro_fig2/jobs_robustness.tsv}"
+ROOT="."
+JOBS="${JOBS:-./repro_fig2/jobs_robustness.tsv}"
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate gendisc-transformers
 
-export HF_HOME="/data/gdh/hf_cache"
+export HF_HOME="${HF_HOME:-./hf_cache}"
 export HF_DATASETS_CACHE="$HF_HOME/datasets"
 
-cd "$ROOT"
+cd .
 line="$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" "$JOBS")"
 IFS=$'\t' read -r run_dir noise <<< "$line"
 

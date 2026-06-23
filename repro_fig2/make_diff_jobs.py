@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-ROOT = Path("/data/gdh/Generative-vs-Discriminative-Classifiers")
+ROOT = Path(".")
 
 DATASETS = {
     "imdb": "imdb",
