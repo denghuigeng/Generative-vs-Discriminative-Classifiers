@@ -24,6 +24,10 @@ SAMPLES = [128, 256, 512, 1024, 2048, 4096, -1]
 SEEDS = [79140, 24561, 54641]
 
 
+def sample_first_order(samples):
+    return sorted(samples, key=lambda sample: (sample < 0, sample if sample >= 0 else 10**18))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--one_seed", action="store_true")
@@ -38,10 +42,11 @@ def main() -> None:
     args = parser.parse_args()
 
     seeds = args.seeds[:1] if args.one_seed else args.seeds
+    samples = sample_first_order(args.samples)
     rows = []
-    for dataset in args.datasets:
-        for model in args.models:
-            for sample in args.samples:
+    for sample in samples:
+        for dataset in args.datasets:
+            for model in args.models:
                 for seed in seeds:
                     rows.append(
                         f"{dataset}\t{DATASETS[dataset]}\t{model}\t{sample}\t{seed}\n"
@@ -51,7 +56,8 @@ def main() -> None:
     out.write_text("".join(rows))
     print(f"Datasets: {args.datasets}")
     print(f"Models: {args.models}")
-    print(f"Samples: {args.samples}")
+    print(f"Samples: {samples}")
+    print("Job order: sample size first; full-data sample=-1 is last")
     print(f"Seeds: {seeds}")
     print(f"Wrote {len(rows)} DIFF jobs to {out}")
     print(f"Use SLURM array range: 0-{len(rows) - 1}")

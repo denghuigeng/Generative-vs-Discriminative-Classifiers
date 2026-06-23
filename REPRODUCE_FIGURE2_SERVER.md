@@ -553,6 +553,9 @@ python repro_fig2/make_jobs_paper.py \
 5 * 3 * 3 * 7 = 315 tasks
 ```
 
+生成的任务按样本量优先排序：`128 -> 256 -> 512 -> 1024 -> 2048 -> 4096 -> full`。
+这样会先跑完所有小样本实验，把所有 full-data 任务统一放到最后。
+
 三 seeds：
 
 ```bash

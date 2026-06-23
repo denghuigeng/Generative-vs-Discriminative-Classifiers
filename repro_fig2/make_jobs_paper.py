@@ -43,6 +43,10 @@ def csv_list(value: str):
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def sample_first_order(samples):
+    return sorted(samples, key=lambda sample: (sample < 0, sample if sample >= 0 else 10**18))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--preset", choices=PRESETS, default="figure2")
@@ -63,7 +67,7 @@ def main() -> None:
     preset_datasets, preset_models = PRESETS[args.preset]
     datasets = args.datasets or preset_datasets
     models = args.models or preset_models
-    samples = [int(x) for x in (args.samples or SAMPLES)]
+    samples = sample_first_order([int(x) for x in (args.samples or SAMPLES)])
     seeds = [int(x) for x in (args.seeds or SEEDS)]
     if args.one_seed:
         seeds = seeds[:1]
@@ -78,10 +82,10 @@ def main() -> None:
         models = [model for model in models if model in {"enc", "ar"}]
 
     rows = []
-    for dataset in datasets:
-        for model in models:
-            for layers, heads in layer_pairs:
-                for sample in samples:
+    for sample in samples:
+        for dataset in datasets:
+            for model in models:
+                for layers, heads in layer_pairs:
                     for seed in seeds:
                         rows.append(
                             f"{model}\t{dataset}\t{sample}\t{seed}\t"
@@ -95,6 +99,7 @@ def main() -> None:
     print(f"Datasets: {datasets}")
     print(f"Models: {models}")
     print(f"Samples: {samples}")
+    print("Job order: sample size first; full-data sample=-1 is last")
     print(f"Seeds: {seeds}")
     print(f"Layer pairs: {layer_pairs}")
     print(f"Initialization: {args.initialization}")

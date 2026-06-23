@@ -22,6 +22,10 @@ SEEDS = [79140, 24561, 54641]
 LAYERS = [(1, 1), (6, 6), (12, 12)]
 
 
+def sample_first_order(samples):
+    return sorted(samples, key=lambda sample: (sample < 0, sample if sample >= 0 else 10**18))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--one_seed", action="store_true", help="Only use the first seed for a cheaper first pass.")
@@ -30,10 +34,10 @@ def main() -> None:
 
     seeds = SEEDS[:1] if args.one_seed else SEEDS
     rows = []
-    for dataset in DATASETS:
-        for model in MODELS:
-            for layers, heads in LAYERS:
-                for sample in SAMPLES:
+    for sample in sample_first_order(SAMPLES):
+        for dataset in DATASETS:
+            for model in MODELS:
+                for layers, heads in LAYERS:
                     for seed in seeds:
                         rows.append(
                             f"{model}\t{dataset}\t{sample}\t{seed}\t"

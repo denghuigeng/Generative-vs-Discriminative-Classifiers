@@ -227,6 +227,7 @@ python repro_fig2/make_jobs_paper.py \
 ```bash
 wc -l "./repro_fig2/jobs_figure2_1seed.tsv"
 head "./repro_fig2/jobs_figure2_1seed.tsv"
+tail "./repro_fig2/jobs_figure2_1seed.tsv"
 ```
 
 应为：
@@ -234,6 +235,9 @@ head "./repro_fig2/jobs_figure2_1seed.tsv"
 ```text
 315
 ```
+
+任务文件现在按样本量优先排序：先跑所有 `128`，再跑 `256`、`512`、`1024`、
+`2048`、`4096`，最后才跑所有 `sample=-1/full-data`。
 
 ---
 
