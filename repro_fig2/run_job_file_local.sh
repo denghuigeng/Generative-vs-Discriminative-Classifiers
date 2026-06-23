@@ -102,12 +102,27 @@ echo "GPUs: $GPU_CSV  workers=$WORKER_COUNT"
 echo "Precision: $PRECISION  max_len=$MAX_LEN"
 echo "Total jobs: $TOTAL_JOBS"
 echo "Logs: $OUT/local_logs"
+echo "Optional batch overrides: BATCH_SIZE/GRAD_ACCUM or ENC_BATCH_SIZE/ENC_GRAD_ACCUM, AR_BATCH_SIZE/AR_GRAD_ACCUM, MLM_BATCH_SIZE/MLM_GRAD_ACCUM"
+
+get_override() {
+  local specific_var="$1"
+  local global_var="$2"
+  local value=""
+  if [[ -n "${!global_var-}" ]]; then
+    value="${!global_var}"
+  fi
+  if [[ -n "${!specific_var-}" ]]; then
+    value="${!specific_var}"
+  fi
+  printf '%s' "$value"
+}
 
 worker() {
   local worker_index="$1"
   local gpu="$2"
   local line_index=0
   local job_number start_ts end_ts duration status done_count log
+  local upper_model batch_size grad_accum extra_args
   while IFS=$'\t' read -r model dataset sample seed layers heads initialization; do
     if [[ -z "${model:-}" ]]; then
       continue
@@ -115,9 +130,25 @@ worker() {
     if (( line_index % WORKER_COUNT == worker_index )); then
       initialization="${initialization:-scratch}"
       log="$OUT/local_logs/${model}_${dataset}_${sample}_${seed}_${layers}.log"
+      upper_model="$(printf '%s' "$model" | tr '[:lower:]' '[:upper:]')"
+      batch_size="$(get_override "${upper_model}_BATCH_SIZE" "BATCH_SIZE")"
+      grad_accum="$(get_override "${upper_model}_GRAD_ACCUM" "GRAD_ACCUM")"
+      extra_args=()
+      if [[ -n "$batch_size" ]]; then
+        extra_args+=(--batch_size "$batch_size")
+      fi
+      if [[ -n "$grad_accum" ]]; then
+        extra_args+=(--gradient_accumulation_steps "$grad_accum")
+      fi
+      if [[ -n "${EVAL_BATCH_SIZE:-}" ]]; then
+        extra_args+=(--eval_batch_size "$EVAL_BATCH_SIZE")
+      fi
+      if [[ -n "${INFERENCE_BATCH_SIZE:-}" ]]; then
+        extra_args+=(--inference_batch_size "$INFERENCE_BATCH_SIZE")
+      fi
       job_number=$((line_index + 1))
       start_ts="$(date +%s)"
-      printf '[%s] [GPU %s] START job=%s/%s %s %s sample=%s seed=%s layers=%s log=%s\n' \
+      printf '[%s] [GPU %s] START job=%s/%s %s %s sample=%s seed=%s layers=%s batch=%s grad_accum=%s log=%s\n' \
         "$(date '+%F %T')" \
         "$gpu" \
         "$job_number" \
@@ -127,6 +158,8 @@ worker() {
         "$sample" \
         "$seed" \
         "$layers" \
+        "${batch_size:-paper-default}" \
+        "${grad_accum:-paper-default}" \
         "$log"
       if CUDA_VISIBLE_DEVICES="$gpu" python "$ROOT/repro_fig2/train_one.py" \
         --model "$model" \
@@ -138,7 +171,8 @@ worker() {
         --initialization "$initialization" \
         --precision "$PRECISION" \
         --max_len "$MAX_LEN" \
-        --output_root "$OUT" >"$log" 2>&1; then
+        --output_root "$OUT" \
+        "${extra_args[@]}" >"$log" 2>&1; then
         status=0
       else
         status=$?

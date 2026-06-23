@@ -260,6 +260,31 @@ PRECISION=fp16 bash repro_fig2/run_job_file_local.sh \
   0,1,2,3
 ```
 
+可选加速：如果显存明显空闲，可以调大单卡 micro-batch，同时把梯度累积调小，
+尽量保持有效 batch size 仍为 32：
+
+```bash
+ENC_BATCH_SIZE=32 ENC_GRAD_ACCUM=1 \
+MLM_BATCH_SIZE=32 MLM_GRAD_ACCUM=1 \
+AR_BATCH_SIZE=16 AR_GRAD_ACCUM=2 \
+EVAL_BATCH_SIZE=64 INFERENCE_BATCH_SIZE=32 \
+PRECISION=fp16 bash repro_fig2/run_job_file_local.sh \
+  "$ROOT/repro_fig2/jobs_figure2_1seed.tsv" \
+  "$ROOT/outputs/paper_repro_fastbatch" \
+  0,1,2,3
+```
+
+论文默认等效 batch size 大致是 32：
+
+```text
+ENC/MLM: batch_size=16, grad_accum=2
+AR:      batch_size=8,  grad_accum=4
+```
+
+所以不建议只把 `BATCH_SIZE` 调大但不改 `GRAD_ACCUM`，那会改变有效 batch size，
+结果就不再是严格同一套训练配置。若 AR 在 12 层或 full-data 上 OOM，把
+`AR_BATCH_SIZE=16 AR_GRAD_ACCUM=2` 改回 `AR_BATCH_SIZE=8 AR_GRAD_ACCUM=4`。
+
 脚本启动时会先打印：
 
 ```text
