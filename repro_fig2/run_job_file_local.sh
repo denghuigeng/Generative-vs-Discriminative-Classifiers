@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-ROOT="/data/gdh/Generative-vs-Discriminative-Classifiers"
+ROOT="${ROOT:-/data/gdh/Generative-vs-Discriminative-Classifiers}"
 JOBS="${1:?job TSV is required}"
 OUT="${2:?output root is required}"
 GPU_CSV="${3:-0}"
@@ -17,16 +17,118 @@ IFS=',' read -r -a GPUS <<< "$GPU_CSV"
 WORKER_COUNT="${#GPUS[@]}"
 mkdir -p "$OUT/local_logs"
 
+TOTAL_JOBS="$(awk 'NF {n++} END {print n + 0}' "$JOBS")"
+START_TS="$(date +%s)"
+PROGRESS_FILE="$OUT/local_logs/.progress_count"
+LOCK_FILE="$OUT/local_logs/.progress.lock"
+LOCK_DIR="$OUT/local_logs/.progress.lockdir"
+printf '0\n' > "$PROGRESS_FILE"
+
+format_seconds() {
+  local total="$1"
+  local hours=$((total / 3600))
+  local minutes=$(((total % 3600) / 60))
+  local seconds=$((total % 60))
+  printf "%02d:%02d:%02d" "$hours" "$minutes" "$seconds"
+}
+
+with_progress_lock() {
+  if command -v flock >/dev/null 2>&1; then
+    (
+      flock 9
+      "$@"
+    ) 9>"$LOCK_FILE"
+    return
+  fi
+
+  while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+    sleep 0.1
+  done
+  "$@"
+  rmdir "$LOCK_DIR"
+}
+
+increment_progress() {
+  local done_count
+  done_count="$(cat "$PROGRESS_FILE" 2>/dev/null || printf '0')"
+  done_count=$((done_count + 1))
+  printf '%s\n' "$done_count" > "$PROGRESS_FILE"
+  printf '%s\n' "$done_count"
+}
+
+print_progress() {
+  local done_count="$1"
+  local gpu="$2"
+  local model="$3"
+  local dataset="$4"
+  local sample="$5"
+  local seed="$6"
+  local layers="$7"
+  local job_seconds="$8"
+  local now elapsed avg remaining eta
+
+  now="$(date +%s)"
+  elapsed=$((now - START_TS))
+  if ((done_count > 0)); then
+    avg=$((elapsed / done_count))
+  else
+    avg=0
+  fi
+  remaining=$((TOTAL_JOBS - done_count))
+  if ((remaining < 0)); then
+    remaining=0
+  fi
+  eta=$((avg * remaining))
+
+  printf '[%s] [GPU %s] DONE %s/%s %s %s sample=%s seed=%s layers=%s job=%s elapsed=%s avg/job=%s ETA=%s\n' \
+    "$(date '+%F %T')" \
+    "$gpu" \
+    "$done_count" \
+    "$TOTAL_JOBS" \
+    "$model" \
+    "$dataset" \
+    "$sample" \
+    "$seed" \
+    "$layers" \
+    "$(format_seconds "$job_seconds")" \
+    "$(format_seconds "$elapsed")" \
+    "$(format_seconds "$avg")" \
+    "$(format_seconds "$eta")"
+}
+
+echo "Job file: $JOBS"
+echo "Output root: $OUT"
+echo "GPUs: $GPU_CSV  workers=$WORKER_COUNT"
+echo "Precision: $PRECISION  max_len=$MAX_LEN"
+echo "Total jobs: $TOTAL_JOBS"
+echo "Logs: $OUT/local_logs"
+
 worker() {
   local worker_index="$1"
   local gpu="$2"
   local line_index=0
+  local job_number start_ts end_ts duration status done_count log
   while IFS=$'\t' read -r model dataset sample seed layers heads initialization; do
+    if [[ -z "${model:-}" ]]; then
+      continue
+    fi
     if (( line_index % WORKER_COUNT == worker_index )); then
       initialization="${initialization:-scratch}"
       log="$OUT/local_logs/${model}_${dataset}_${sample}_${seed}_${layers}.log"
-      echo "[GPU $gpu] $model $dataset sample=$sample seed=$seed layers=$layers"
-      CUDA_VISIBLE_DEVICES="$gpu" python "$ROOT/repro_fig2/train_one.py" \
+      job_number=$((line_index + 1))
+      start_ts="$(date +%s)"
+      printf '[%s] [GPU %s] START job=%s/%s %s %s sample=%s seed=%s layers=%s log=%s\n' \
+        "$(date '+%F %T')" \
+        "$gpu" \
+        "$job_number" \
+        "$TOTAL_JOBS" \
+        "$model" \
+        "$dataset" \
+        "$sample" \
+        "$seed" \
+        "$layers" \
+        "$log"
+      if CUDA_VISIBLE_DEVICES="$gpu" python "$ROOT/repro_fig2/train_one.py" \
         --model "$model" \
         --dataset "$dataset" \
         --sample_size "$sample" \
@@ -36,7 +138,29 @@ worker() {
         --initialization "$initialization" \
         --precision "$PRECISION" \
         --max_len "$MAX_LEN" \
-        --output_root "$OUT" >"$log" 2>&1
+        --output_root "$OUT" >"$log" 2>&1; then
+        status=0
+      else
+        status=$?
+      fi
+      end_ts="$(date +%s)"
+      duration=$((end_ts - start_ts))
+      if ((status != 0)); then
+        printf '[%s] [GPU %s] FAILED %s %s sample=%s seed=%s layers=%s job=%s log=%s\n' \
+          "$(date '+%F %T')" \
+          "$gpu" \
+          "$model" \
+          "$dataset" \
+          "$sample" \
+          "$seed" \
+          "$layers" \
+          "$(format_seconds "$duration")" \
+          "$log"
+        tail -n 40 "$log" || true
+        exit "$status"
+      fi
+      done_count="$(with_progress_lock increment_progress)"
+      print_progress "$done_count" "$gpu" "$model" "$dataset" "$sample" "$seed" "$layers" "$duration"
     fi
     line_index=$((line_index + 1))
   done < "$JOBS"

@@ -30,11 +30,7 @@ git pull origin main
 git log -1 --oneline
 ```
 
-确认最新提交至少是：
-
-```text
-f3935df Route AR training through canonical pipeline
-```
+确认代码里已经包含新的统一训练入口和本地多 GPU 进度日志。
 
 现在 `ar/train_gpt.py` 已经不是旧训练逻辑，而是转发到统一入口：
 
@@ -264,6 +260,23 @@ PRECISION=fp16 bash repro_fig2/run_job_file_local.sh \
   0,1,2,3
 ```
 
+脚本启动时会先打印：
+
+```text
+Total jobs: 315
+Logs: /data/gdh/Generative-vs-Discriminative-Classifiers/outputs/paper_repro/local_logs
+```
+
+每个任务结束后会打印类似：
+
+```text
+[2026-06-23 20:15:31] [GPU 0] DONE 12/315 enc agnews sample=2048 seed=79140 layers=1 job=00:03:18 elapsed=00:42:10 avg/job=00:03:30 ETA=17:40:30
+```
+
+其中 `job` 是当前任务耗时，`elapsed` 是本轮脚本已经运行的时间，`avg/job`
+是已完成任务的平均耗时，`ETA` 是粗略预计剩余时间。后面的 12 层和 full-data
+任务通常更慢，所以 ETA 只是参考，不是精确倒计时。
+
 后台运行：
 
 ```bash
@@ -279,6 +292,13 @@ nohup bash -c 'PRECISION=fp16 bash repro_fig2/run_job_file_local.sh \
 watch -n 2 nvidia-smi
 tail -f "$ROOT/outputs/run_figure2_1seed.log"
 find "$ROOT/outputs/paper_repro" -name metrics.json | wc -l
+```
+
+如果你已经用旧脚本启动了任务，旧日志不会显示 ETA。可以先用下面两个命令估计进度：
+
+```bash
+find "$ROOT/outputs/paper_repro" -name metrics.json | wc -l
+ps -eo pid,etime,cmd | grep train_one.py | grep -v grep
 ```
 
 跑满主实验后，`metrics.json` 数量应接近 `315`。
