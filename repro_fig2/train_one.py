@@ -146,9 +146,7 @@ def load_repro_dataset(
     val_size: int,
     test_split: str,
 ) -> Tuple[Dataset, Dataset, Dataset, Dict[str, object]]:
-    raw = normalize_text_columns(
-        load_dataset(DATASET_PATHS[dataset_name], trust_remote_code=True)
-    )
+    raw = normalize_text_columns(load_dataset(DATASET_PATHS[dataset_name]))
 
     selected_test_split = (
         PAPER_TEST_SPLITS[dataset_name] if test_split == "paper" else test_split

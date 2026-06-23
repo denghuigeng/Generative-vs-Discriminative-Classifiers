@@ -64,7 +64,7 @@ def load_eval_dataset(
     tokenizer: GPT2TokenizerFast,
     max_length: int,
 ):
-    raw = load_dataset(dataset_name, trust_remote_code=True)
+    raw = load_dataset(dataset_name)
     split = PAPER_TEST_SPLITS.get(
         dataset_name, "test" if "test" in raw else "validation"
     )

@@ -47,7 +47,7 @@ def main() -> None:
 
     print("Caching Hugging Face datasets")
     for name, path in DATASETS.items():
-        ds = load_dataset(path, trust_remote_code=True)
+        ds = load_dataset(path)
         print(f"- {name}: {path} -> {ds}")
 
     print("\nCaching tokenizer/config files")

@@ -21,7 +21,7 @@ import ipdb
 
 def get_dataset(data_key, seed_val=42):
     """Load and split the dataset"""
-    dataset = load_dataset(data_key, trust_remote_code=True)
+    dataset = load_dataset(data_key)
     dataset = dataset.map(lambda x: {'text': str(x['text'])})
     train_dataset = dataset['train']
     train_dataset = train_dataset.shuffle(seed=seed_val)
