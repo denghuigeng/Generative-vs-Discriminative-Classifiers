@@ -40,3 +40,7 @@ datasets/
 
 # Generated local server variants
 environment.server.yml
+
+# Local source archives
+Association_for_Computational_Linguistics__ACL__conference.zip
+Association_for_Computational_Linguistics__ACL__conference/
